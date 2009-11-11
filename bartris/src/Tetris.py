@@ -17,14 +17,41 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 """
-import serial
-import pygame, time, random, os
+import pygame, time, random, os, operator, string
 from Tetromino     import *
 from Grid          import *
 from Sound         import *
 from pygame.locals import *
 from math          import *
- 
+
+import serial
+import sys
+sys.path.append('/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/python2.6/site-packages')
+import osc
+
+def hexDump(bytes):
+    """Useful utility; prints the string in hexadecimal"""
+    for i in range(len(bytes)):
+        sys.stdout.write("%2x " % (ord(bytes[i])))
+        if (i+1) % 8 == 0:
+            print repr(bytes[i-7:i+1])
+
+    if(len(bytes) % 8 != 0):
+        print string.rjust("", 11), repr(bytes[i-len(bytes)%8:i+1])
+
+
+class SerialServo():
+    def __init__(self):
+        self.serial = serial.Serial(port="/dev/tty.usbserial-A6004oBL", baudrate=38400)
+    
+    def checksum(self, msg):
+        return reduce(operator.add, map(ord, msg)) % 256
+
+    def sendCommand(self, speed_list):
+        command = ''.join(['a'] + map(chr, speed_list))
+        command += chr(self.checksum(command))
+        self.serial.write(command)
+
 #Initialize Vars :)
 
 num_cells_wide      = 10
@@ -39,6 +66,7 @@ grey                = (171,171,171)
 darkGrey            = (85,85,85)
 brown               = (0x8e, 0x48, 0x1d)
 color_dict          = {2: blue, 6 : brown, 10: white}
+color_port          = {blue: 0, brown: 1, white: 2}
 color_range         = 10
 starting_cell_x     = 4
 starting_cell_y     = 1
@@ -62,6 +90,25 @@ tetrominoList       = ['T','I','O','S','Z','L','J']
 levels              = [0.0004,0.00025,0.0001,0.00005,0.00002]
 tetromino           = Tetromino(starting_cell_x,starting_cell_y,black,brown,tetrominoList[0])
 sound               = Sound()
+
+servo_down_pos = 25
+servo_up_pos = 115
+servo_down_list = [servo_down_pos, servo_down_pos, servo_down_pos]
+
+s = SerialServo()
+time.sleep(2)
+s.sendCommand(servo_down_list)
+# time.sleep(5)
+# for i in range(25, 115):
+#     s.sendCommand([i,0,0])
+#     time.sleep(0.010)
+# time.sleep(1)
+# for i in range(115, 25, -1):
+#     s.sendCommand([i,0,0])
+#     time.sleep(0.010)
+# s.sendCommand([10,0,0])
+# time.sleep(2)
+# sys.exit(0)
 
 #Init Pygame
 os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -90,6 +137,7 @@ while True:
     move_down_ok  = tetromino.max_y < grid.height            
     move_left_ok  = tetromino.min_x > 0
     move_right_ok = tetromino.max_x < grid.width
+
     
     #Render Text
     if not gameOver:
@@ -119,10 +167,7 @@ while True:
         else: #New Tetromino
             #ADDED: Set tetromino color to one of our three allowed colors
             color_index = random.randint(0,color_range)
-            print color_index
             color = ()
-            print sorted(color_dict.keys())
-            print sorted(color_dict)
             for color_probability in sorted(color_dict.keys()):                
                 if color_index <= color_probability:
                     color = color_dict[color_probability]
@@ -138,17 +183,29 @@ while True:
             if timesFound > 3:
                 gameOver = True
         #Levels and Speedup
-        if grid.numLinesCleared % level_up_line_count == 0 and lastNumLinesCleared != grid.numLinesCleared:
+        if grid.numLinesCleared >= (level_up_line_count * current_level) and lastNumLinesCleared != grid.numLinesCleared:
             lastNumLinesCleared = grid.numLinesCleared
             if current_level < len(levels):
                 fallingRate = levels[current_level]
             current_level += 1
             sound.play("../sound/levelup.wav")
+
             #ADDED: Color accumulation output and reset on level finish
             print grid.color_accum
+            total_cells = sum(grid.color_accum.values())
+            color_timing = dict([(key, (float(x) / float(total_cells)) * 2.0) for key, x in grid.color_accum.items()])
+            
+            for color, hold_time in color_timing.items():
+                servo_list = [servo_down_pos, servo_down_pos, servo_down_pos]
+                servo_list[ color_port[color] ] = servo_up_pos
+                print servo_list
+                s.sendCommand(servo_list)
+                time.sleep(hold_time)
+                s.sendCommand([servo_down_pos, servo_down_pos, servo_down_pos])
+                time.sleep(2)
             grid.color_accum = {}
 
-        #Render Background
+        #render Background
         pygame.draw.rect(screen,(255,255,255),Rect(0,0,grid.width+2,grid.height+2))            
         #Render Grid
         grid.render(screen)
@@ -164,5 +221,8 @@ while True:
         game_over_text     = font.render("GAME OVER... LEVEL: "+str(current_level)+" LINES: " + str(grid.numLinesCleared),1, red)
         game_over_text_pos = Rect((1,1),(300,20))
         screen.blit(game_over_text,game_over_text_pos)  
+        if key == K_q:
+            break;            
+
     #Update Display
     pygame.display.update()
