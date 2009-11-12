@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 """
+    Too Much Tetris is a tetris clone with event hooking for whatever system I want
+    Copyright (C) 2009 Kyle Machulis/Nonpolynomial Labs <kyle@nonpolynomial.com
+
+    Too Much Tetris is derived from:
     Python Tetris is a clunky pygame Tetris clone. Feel free to make it better!!
     Copyright (C) 2008 Nick Crafford <nickcrafford@earthlink.net>
 
@@ -17,17 +21,20 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 """
-import pygame, time, random, os, operator, string
+
+import sys, pygame, time, random, os, operator, string
 from Tetromino     import *
 from Grid          import *
 from Sound         import *
 from pygame.locals import *
 from math          import *
 from types         import *
-import serial
-import sys
+
+os.environ["DYLD_LIBRARY_PATH"] = "/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/"
 sys.path.append('/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/python2.6/site-packages')
-import osc
+from ambx import *
+import serial
+
 
 def hexDump(bytes):
     """Useful utility; prints the string in hexadecimal"""
@@ -53,7 +60,7 @@ class TetrisEventHandler():
 
 COLORS = {
     "black"               : (0,0,0),
-    "white"               : (255,255,255),
+    "white"               : (64, 64, 64),
     "blue"                : (0,0,255),
     "red"                 : (255,0,0),
     "grey"                : (171,171,171),
@@ -70,13 +77,20 @@ class Tetris():
             "num_cells_high"         : 20,
             "cell_width"             : 25,
             "cell_height"            : 25,
-            "falling_rate"           : .0005,
+
             "starting_cell_x"        : 4,
             "starting_cell_y"        : 1
             }
 
+        self._level_params = {
+            "moving_rate"            : [0.00005,.00004,0.00003,0.00002,0.00001],
+            "rotating_rate"          : [0.00009,0.00008,0.00007,0.00006,0.00005],
+            "falling_rate"           : [0.00001,0.00025,0.0001,0.00005,0.00002]
+            }
+
         self._state = {
             "last_falling_time"      : 0,
+            "falling_rate"           : self._level_params["falling_rate"][0],
             "last_moving_time"       : 0,
             "last_rotating_time"     : 0,
             "level_up_line_count"    : 1,
@@ -88,24 +102,18 @@ class Tetris():
             "current_y"              : 0
             }
 
-        self._level_params = {
-            "moving_rate"            : [0.00005,.00004,0.00003,0.00002,0.00001],
-            "rotating_rate"          : [0.00009,0.00008,0.00007,0.00006,0.00005],
-            "falling_rate"           : [0.0004,0.00025,0.0001,0.00005,0.00002]
-            }
 
         self._event_handlers = []
 
-        self._color_dict     = {2: COLORS["blue"], 6 : COLORS["brown"], 10: COLORS["white"]}
+        self._color_dict     = {1: COLORS["blue"], 6 : COLORS["brown"], 10: COLORS["white"]}
         self._color_range    = 10
-
 
         self._textBuff       = 2
         self._grid           = Grid( 1, 1, self._params["cell_width"], self._params["cell_height"], self._params["num_cells_wide"], self._params["num_cells_high"], COLORS["black"])
         self._tetrominoList  = ['T','I','O','S','Z','L','J']
-        self._new_tetromino()                             
         self._sound          = Sound()
 
+        self._new_tetromino()
         os.environ['SDL_VIDEO_CENTERED'] = '1'
         pygame.init()
         self._screen = pygame.display.set_mode((self._grid.width+self._textBuff,self._grid.height+self._textBuff),0,32)
@@ -118,24 +126,21 @@ class Tetris():
     def run_game(self):
         if self._state["game_over"]:
             self._game_over_state()
-            return
-        self._game_loop()
+        else:
+            self._game_loop()
+        self._render()
         return
 
     def _game_over_state(self):
-        #Render Background
-        pygame.draw.rect(self._screen,(255,255,255),Rect(0,0,grid.width+2,grid.height+2))
-        #Render Grid
-        self._grid.render(self._screen)
-        game_over_text     = font.render("GAME OVER... LEVEL: "+str(current_level)+" LINES: " + str(grid.numLinesCleared),1, red)
-        game_over_text_pos = Rect((1,1),(300,20))
-        self._screen.blit(game_over_text,game_over_text_pos)
+
+        current_key = ''
         for event in pygame.event.get():
             if event.type == QUIT:
                 raise QuitException()
             if event.type == pygame.KEYDOWN:
                 current_key = event.key
-        if key == K_q:
+
+        if current_key == K_q:
             raise QuitException()
 
     def _game_loop(self):
@@ -149,7 +154,6 @@ class Tetris():
         #Levels and Speedup
         if self._grid.num_lines_cleared >= (self._state["level_up_line_count"] * self._state["current_level"]) and self._state["last_num_lines_cleared"] != self._grid.num_lines_cleared:
             self._level_up()
-        self._render()
 
     def _move_tetromino(self):
 
@@ -185,14 +189,14 @@ class Tetris():
         falling_time  = current_time - self._state["last_falling_time"]
 
         #Downward fall
-        if falling_time >= self._params["falling_rate"] and legal_moves["down"]:
+        if falling_time >= self._state["falling_rate"] and legal_moves["down"]:
             self._state["last_falling_time"] = current_time
             self._tetromino.move(self._grid,0,1)
             self._state["current_y"] += 1
         if not legal_moves["down"]:
             self._tetromino.cluck.play()
             self._tetromino.active = False
-        
+
 
     def _new_tetromino(self):
         #ADDED: Set tetromino color to one of our three allowed colors
@@ -205,7 +209,7 @@ class Tetris():
 
         rand          = random.randint(0,len(self._tetrominoList)-1)
         self._tetromino = Tetromino(self._params["starting_cell_x"], self._params["starting_cell_y"], COLORS["black"],color,self._tetrominoList[rand])
-        
+
         if self._grid.checkForLines():
             for e in self._event_handlers:
                 e.on_line_created(self)
@@ -221,22 +225,29 @@ class Tetris():
         self._state["last_num_lines_cleared"] = self._grid.num_lines_cleared
         self._state["current_level"] += 1
         if self._state["current_level"] < len(self._level_params["falling_rate"]):
-            self._state["fallingRate"] = self._level_params["falling_rate"][self._state["current_level"]]
+            self._state["falling_rate"] = self._level_params["falling_rate"][self._state["current_level"]]
         self._sound.play("../sound/levelup.wav")
         for e in self._event_handlers:
             e.on_level_up(self)
-        
+
     def _render(self):
         #render Background
         pygame.draw.rect(self._screen,(255,255,255),Rect(0,0,self._grid.width+2,self._grid.height+2))
         #Render Grid
         self._grid.render(self._screen)
-        lineText       = "Lines: " + str(self._grid.num_lines_cleared) + "  Level: " + str(self._state["current_level"])
-        lines_text     = self._font.render(lineText, 1, COLORS["white"])
-        lines_text_pos = Rect((1,1),(300,20))
-        self._screen.blit(lines_text, lines_text_pos)
-        #Update Display
+        self._render_status()
         pygame.display.update()
+
+    def _render_status(self):
+        if not self._state["game_over"]:
+            lineText       = "Lines: " + str(self._grid.num_lines_cleared) + "  Level: " + str(self._state["current_level"])
+            lines_text     = self._font.render(lineText, 1, COLORS["white"])
+            lines_text_pos = Rect((1,1),(300,20))
+            self._screen.blit(lines_text, lines_text_pos)
+        else:
+            game_over_text     = self._font.render("GAME OVER... LEVEL: "+str( self._state["current_level"])+" LINES: " + str(self._grid.num_lines_cleared),1, COLORS["red"])
+            game_over_text_pos = Rect((1,1),(300,20))
+            self._screen.blit(game_over_text,game_over_text_pos)
 
     def add_event_handler(self, eh):
         self._event_handlers.append(eh)
@@ -252,7 +263,7 @@ class SerialServo():
         command = ''.join(['a'] + map(chr, speed_list))
         command += chr(self.checksum(command))
         self.serial.write(command)
-        
+
 class Bartris(TetrisEventHandler):
     def __init__(self):
         self.SERVO_DOWN_POS  = 25
@@ -281,7 +292,7 @@ class Bartris(TetrisEventHandler):
         #ADDED: Color accumulation output and reset on level finish
         total_cells = sum(grid.color_accum.values())
         color_timing = dict([(c, (float(x) / float(total_cells)) * 2.0) for c, x in grid.color_accum.items()])
-        
+
         for color, hold_time in color_timing.items():
             servo_list = list(self.SERVO_DOWN_LIST)
             servo_list[ self.COLOR_PORT[color] ] = self.SERVO_UP_POS
@@ -291,9 +302,37 @@ class Bartris(TetrisEventHandler):
             time.sleep(2)
         grid.color_accum = {}
 
+class amBXtris(TetrisEventHandler):
+    def __init__(self):
+        self.ambx_device = ambx()
+        if self.ambx_device.open() is False:
+            print "No ambx device connected"
+            return
+        return
+    
+    def on_line_created(self, tetris_obj):
+        grid = tetris_obj._grid
+        total_cells = sum(grid.color_accum.values())
+        rgb_list = [[x * (float(value) / float(total_cells)) for x in key] for key, value in grid.color_accum.items()]
+        color = [0,0,0]
+        for c in rgb_list:
+            color = map(operator.add, color, c)
+        color = map(int, color)
+        print "Setting color %s" % color
+        
+        self.ambx_device.setLightColor(ambx.LEFT_WW_LIGHT,color)
+        self.ambx_device.setLightColor(ambx.CENTER_WW_LIGHT,color)
+        self.ambx_device.setLightColor(ambx.RIGHT_WW_LIGHT,color)
+        self.ambx_device.setLightColor(ambx.RIGHT_SP_LIGHT,color)        
+        self.ambx_device.setLightColor(ambx.LEFT_SP_LIGHT,color)
+
+        self.ambx_device.setFanSpeed(ambx.LEFT_FAN, 0)
+
 def main(argv=None):
+    a = amBXtris()
     b = Bartris()
     t = Tetris()
+    t.add_event_handler(a)
     t.add_event_handler(b)
     t.init_game()
     try:
@@ -301,7 +340,6 @@ def main(argv=None):
             t.run_game()
     except QuitException, e:
         return 0
-    
+
 if __name__ == "__main__":
-        
     sys.exit(main())
