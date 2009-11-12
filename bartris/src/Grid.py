@@ -30,7 +30,7 @@ class Grid(object):
         self.cell_width      = cell_width
         self.num_cells_wide  = num_cells_wide
         self.num_cells_tall  = num_cells_tall
-        self.numLinesCleared = 0
+        self.num_lines_cleared = 0
         self.color           = color
         self.height          = cell_height * num_cells_tall
         self.width           = cell_width  * num_cells_wide
@@ -79,6 +79,7 @@ class Grid(object):
         
     def checkForLines(self):
         nums = {}
+        has_lines = False
         #Test for y coords with all thier x coords filled up
         #If so then set that line of x,y coords to masking color and move the rest of the coords
         #above it down one y coord
@@ -91,9 +92,11 @@ class Grid(object):
         for num in nums:
             if nums[num] >= self.num_cells_wide:
                 self.sound.play("../sound/clear.wav")
-                self.numLinesCleared += 1
+                has_lines = True
+                self.num_lines_cleared += 1
                 self.remLine(num)
                 self.shiftGridDown(num)
+        return has_lines
                 
     def topY(self):
         top = self.num_cells_tall
