@@ -77,7 +77,7 @@ class Tetris():
             "num_cells_high"         : 20,
             "cell_width"             : 25,
             "cell_height"            : 25,
-
+            "drink_pouring_time"     : 5.0,
             "starting_cell_x"        : 4,
             "starting_cell_y"        : 1
             }
@@ -85,7 +85,7 @@ class Tetris():
         self._level_params = {
             "moving_rate"            : [0.00005,.00004,0.00003,0.00002,0.00001],
             "rotating_rate"          : [0.00009,0.00008,0.00007,0.00006,0.00005],
-            "falling_rate"           : [0.00001,0.00025,0.0001,0.00005,0.00002]
+            "falling_rate"           : [0.00040,0.00025,0.0001,0.00005,0.00002]
             }
 
         self._state = {
@@ -93,7 +93,7 @@ class Tetris():
             "falling_rate"           : self._level_params["falling_rate"][0],
             "last_moving_time"       : 0,
             "last_rotating_time"     : 0,
-            "level_up_line_count"    : 1,
+            "level_up_line_count"    : 2,
             "last_num_lines_cleared" : 0,
             "top_y"                  : 0,
             "times_found"            : 0,
@@ -170,7 +170,6 @@ class Tetris():
             "right" : self._tetromino.max_x < self._grid.width,
             }
 
-
         if current_key == K_RIGHT and legal_moves["right"]:
             self._tetromino.move(self._grid,1,0)
         if current_key == K_LEFT and legal_moves["left"]:
@@ -193,10 +192,9 @@ class Tetris():
             self._state["last_falling_time"] = current_time
             self._tetromino.move(self._grid,0,1)
             self._state["current_y"] += 1
-        if not legal_moves["down"]:
+        if not legal_moves["down"] and falling_time >= self._state["falling_rate"]:
             self._tetromino.cluck.play()
             self._tetromino.active = False
-
 
     def _new_tetromino(self):
         #ADDED: Set tetromino color to one of our three allowed colors
@@ -266,15 +264,19 @@ class SerialServo():
 
 class Bartris(TetrisEventHandler):
     def __init__(self):
-        self.SERVO_DOWN_POS  = 25
-        self.SERVO_UP_POS    = 115
+        self.SERVO_DOWN_POS  = 80
+        self.SERVO_UP_POS    = 160
         self.SERVO_DOWN_LIST = [self.SERVO_DOWN_POS, self.SERVO_DOWN_POS, self.SERVO_DOWN_POS]
         self.COLOR_PORT      = {COLORS["blue"]: 0, COLORS["brown"]: 1, COLORS["white"]: 2}
-
         self._serial = SerialServo()
-        time.sleep(2)
-        self._serial.sendCommand(self.SERVO_DOWN_LIST)
 
+        # time.sleep(2)
+        # self._serial.sendCommand(self.SERVO_DOWN_LIST)
+        # time.sleep(2)
+        # self._serial.sendCommand([self.SERVO_DOWN_POS, self.SERVO_UP_POS, self.SERVO_UP_POS])
+        # time.sleep(2)
+        # self._serial.sendCommand(self.SERVO_DOWN_LIST)
+        # time.sleep(2)
         # time.sleep(5)
         # for i in range(25, 115):
         #     s.sendCommand([i,0,0])
@@ -291,8 +293,8 @@ class Bartris(TetrisEventHandler):
         grid = tetris_obj._grid
         #ADDED: Color accumulation output and reset on level finish
         total_cells = sum(grid.color_accum.values())
-        color_timing = dict([(c, (float(x) / float(total_cells)) * 2.0) for c, x in grid.color_accum.items()])
-
+        color_timing = dict([(c, (float(x) / float(total_cells)) * tetris_obj._params["drink_pouring_time"]) for c, x in grid.color_accum.items()])
+        time.sleep(2)
         for color, hold_time in color_timing.items():
             servo_list = list(self.SERVO_DOWN_LIST)
             servo_list[ self.COLOR_PORT[color] ] = self.SERVO_UP_POS
@@ -308,7 +310,17 @@ class amBXtris(TetrisEventHandler):
         if self.ambx_device.open() is False:
             print "No ambx device connected"
             return
+
+        self._set_color(COLORS["black"])
         return
+
+    def _set_color(self, color):
+        self.ambx_device.setLightColor(ambx.LEFT_WW_LIGHT,color)
+        self.ambx_device.setLightColor(ambx.CENTER_WW_LIGHT,color)
+        self.ambx_device.setLightColor(ambx.RIGHT_WW_LIGHT,color)
+        self.ambx_device.setLightColor(ambx.RIGHT_SP_LIGHT,color)        
+        self.ambx_device.setLightColor(ambx.LEFT_SP_LIGHT,color)
+        self.ambx_device.setFanSpeed(ambx.LEFT_FAN, 0)
     
     def on_line_created(self, tetris_obj):
         grid = tetris_obj._grid
@@ -319,20 +331,16 @@ class amBXtris(TetrisEventHandler):
             color = map(operator.add, color, c)
         color = map(int, color)
         print "Setting color %s" % color
-        
-        self.ambx_device.setLightColor(ambx.LEFT_WW_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.CENTER_WW_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.RIGHT_WW_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.RIGHT_SP_LIGHT,color)        
-        self.ambx_device.setLightColor(ambx.LEFT_SP_LIGHT,color)
+        self._set_color(color)
 
-        self.ambx_device.setFanSpeed(ambx.LEFT_FAN, 0)
 
 def main(argv=None):
-    a = amBXtris()
     b = Bartris()
+    # b = Bartris()
     t = Tetris()
+    a = amBXtris()
     t.add_event_handler(a)
+
     t.add_event_handler(b)
     t.init_game()
     try:

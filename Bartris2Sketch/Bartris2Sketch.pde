@@ -3,6 +3,7 @@
 #define SERIAL_SPEED 38400
 #define START_BYTE 'a'
 #define MSG_LEN 5
+#define DOWN_POS 80
 
 char r[MSG_LEN];
 char started = 0;
@@ -16,6 +17,9 @@ void setup()
   s[0].attach(9);
   s[1].attach(10);
   s[2].attach(11);
+  s[0].write(DOWN_POS);
+  s[1].write(DOWN_POS);
+  s[2].write(DOWN_POS);
 }
 
 int checksum(char* c)
