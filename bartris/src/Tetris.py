@@ -60,7 +60,7 @@ class TetrisEventHandler():
 
 COLORS = {
     "black"               : (0,0,0),
-    "white"               : (64, 64, 64),
+    "white"               : (255, 255, 255),
     "blue"                : (0,0,255),
     "red"                 : (255,0,0),
     "grey"                : (171,171,171),
@@ -68,10 +68,25 @@ COLORS = {
     "brown"               : (0x8e, 0x48, 0x1d)
     }
 
+DRINKS = {
+    COLORS["darkGrey"] : "rum",
+    COLORS["brown"] : "coke",
+    COLORS["blue"] : "water"
+}
 
 class Tetris():
-    def __init__(self):
 
+    NORMAL_MODE = 0
+    BOOZE_MODE = 1
+    SOBER_MODE = 2
+
+    def __init__(self):
+        self._event_handlers = []
+        self._setup_states()
+        self._state["game_over"] = True
+        self._setup_display()
+
+    def _setup_states(self, mode = 0):
         self._params = {
             "num_cells_wide"         : 10,
             "num_cells_high"         : 20,
@@ -99,13 +114,18 @@ class Tetris():
             "times_found"            : 0,
             "current_level"          : 1,
             "game_over"              : False,
-            "current_y"              : 0
+            "current_y"              : 0,
+            "holding_down"           : False
             }
 
 
-        self._event_handlers = []
+        if mode == self.NORMAL_MODE:
+            self._color_dict     = {1: COLORS["blue"], 6 : COLORS["brown"], 10: COLORS["darkGrey"]}
+        elif mode == self.BOOZE_MODE:
+            self._color_dict     = {3 : COLORS["brown"], 10: COLORS["darkGrey"]}
+        elif mode == self.SOBER_MODE:
+            self._color_dict     = {10: COLORS["blue"]}
 
-        self._color_dict     = {1: COLORS["blue"], 6 : COLORS["brown"], 10: COLORS["white"]}
         self._color_range    = 10
 
         self._textBuff       = 2
@@ -114,9 +134,12 @@ class Tetris():
         self._sound          = Sound()
 
         self._new_tetromino()
+
+    def _setup_display(self):
         os.environ['SDL_VIDEO_CENTERED'] = '1'
         pygame.init()
         self._screen = pygame.display.set_mode((self._grid.width+self._textBuff,self._grid.height+self._textBuff),0,32)
+        #self._screen = pygame.display.set_mode((1024, 768), pygame.FULLSCREEN, 24)
         if pygame.font:
             self._font = pygame.font.Font(None, 18)
 
@@ -132,7 +155,6 @@ class Tetris():
         return
 
     def _game_over_state(self):
-
         current_key = ''
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -142,6 +164,12 @@ class Tetris():
 
         if current_key == K_q:
             raise QuitException()
+        elif current_key == K_n:
+            self._setup_states(self.NORMAL_MODE)
+        elif current_key == K_b:
+            self._setup_states(self.BOOZE_MODE)
+        elif current_key == K_s:
+            self._setup_states(self.SOBER_MODE)
 
     def _game_loop(self):
         time.sleep(0.01)
@@ -157,42 +185,49 @@ class Tetris():
 
     def _move_tetromino(self):
 
-        current_key = ''
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                break
-            if event.type == pygame.KEYDOWN:
-                current_key = event.key
-
         legal_moves   = {
             "down"  : self._tetromino.max_y < self._grid.height,
             "left"  : self._tetromino.min_x > 0,
             "right" : self._tetromino.max_x < self._grid.width,
             }
 
-        if current_key == K_RIGHT and legal_moves["right"]:
-            self._tetromino.move(self._grid,1,0)
-        if current_key == K_LEFT and legal_moves["left"]:
-            self._tetromino.move(self._grid,-1,0)
-        if current_key == K_DOWN and legal_moves["down"]:
-            self._tetromino.move(self._grid,0,1)
-            self._state["current_y"] += 1
-        #TODO: Fix rotation states
-        if current_key == K_UP and False not in legal_moves.values():
-            self._tetromino.rotate(self._grid)
-        #ADDED: quit current_key
-        if current_key == K_q:
-            raise QuitException()
+        current_key = ''
+        up_key = ''
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                break
+            if event.type == pygame.KEYDOWN:
+                current_key = event.key
+            elif event.type == pygame.KEYUP:
+                up_key = event.key
+
+            if current_key == K_RIGHT and legal_moves["right"]:
+                self._tetromino.move(self._grid,1,0)
+            if current_key == K_LEFT and legal_moves["left"]:
+                self._tetromino.move(self._grid,-1,0)
+            if current_key == K_DOWN:
+                self._state["holding_down"] = True
+            elif up_key == K_DOWN:
+                self._state["holding_down"] = False
+            #TODO: Fix rotation states
+            if current_key == K_UP and False not in legal_moves.values():
+                self._tetromino.rotate(self._grid)
+            #ADDED: quit current_key
+            if current_key == K_q:
+                raise QuitException()
 
         current_time  = time.time()/1000.0
         falling_time  = current_time - self._state["last_falling_time"]
 
         #Downward fall
-        if falling_time >= self._state["falling_rate"] and legal_moves["down"]:
+        if self._state["holding_down"] is True and legal_moves["down"]:
+            self._tetromino.move(self._grid,0,1)
+            self._state["current_y"] += 1
+        elif falling_time >= self._state["falling_rate"] and legal_moves["down"]:
             self._state["last_falling_time"] = current_time
             self._tetromino.move(self._grid,0,1)
             self._state["current_y"] += 1
-        if not legal_moves["down"] and falling_time >= self._state["falling_rate"]:
+        elif not legal_moves["down"] and falling_time >= self._state["falling_rate"]:
             self._tetromino.cluck.play()
             self._tetromino.active = False
 
@@ -207,7 +242,7 @@ class Tetris():
 
         rand          = random.randint(0,len(self._tetrominoList)-1)
         self._tetromino = Tetromino(self._params["starting_cell_x"], self._params["starting_cell_y"], COLORS["black"],color,self._tetrominoList[rand])
-
+        self._state["holding_down"] = False
         if self._grid.checkForLines():
             for e in self._event_handlers:
                 e.on_line_created(self)
@@ -268,8 +303,12 @@ class Bartris(TetrisEventHandler):
         self.SERVO_UP_POS    = 160
         self.SERVO_DOWN_LIST = [self.SERVO_DOWN_POS, self.SERVO_DOWN_POS, self.SERVO_DOWN_POS]
         self.COLOR_PORT      = {COLORS["blue"]: 0, COLORS["brown"]: 1, COLORS["white"]: 2}
-        self._serial = SerialServo()
-
+        self._serial = None
+        try:
+            self._serial = SerialServo()
+        except Exception, e:
+            print "SERIAL PORT NOT FOUND, NOT USING BARTRIS"
+            pass
         # time.sleep(2)
         # self._serial.sendCommand(self.SERVO_DOWN_LIST)
         # time.sleep(2)
@@ -289,12 +328,30 @@ class Bartris(TetrisEventHandler):
         # time.sleep(2)
         # sys.exit(0)
 
+    def _render_list(self, tetris_obj, color_list):
+        self._ingredient_font = pygame.font.Font(None, 30)
+        self._percentage_font = pygame.font.Font(None, 60)
+
+        lineText       = "/".join([DRINKS[x] for x in color_list.keys()])
+        lines_text     = self._ingredient_font.render(lineText, 1, COLORS["white"])
+        lines_text_pos = Rect((1,50),(300,150))
+        pLineText       = "/".join(map(str, [int(x*100) for x in color_list.values()]))
+        p_lines_text     = self._percentage_font.render(pLineText, 1, COLORS["white"])
+        p_lines_text_pos = Rect((1,100),(300,250))
+        tetris_obj._screen.blit(lines_text, lines_text_pos)
+        tetris_obj._screen.blit(p_lines_text, p_lines_text_pos)        
+        pygame.display.update()
+
     def on_level_up(self, tetris_obj):
         grid = tetris_obj._grid
         #ADDED: Color accumulation output and reset on level finish
         total_cells = sum(grid.color_accum.values())
+        color_timing = dict([(c, (float(x) / float(total_cells))) for c, x in grid.color_accum.items()])
+        self._render_list(tetris_obj, color_timing)
+        time.sleep(2)        
+        if self._serial is None or self._serial.isOpen() is False:
+            return
         color_timing = dict([(c, (float(x) / float(total_cells)) * tetris_obj._params["drink_pouring_time"]) for c, x in grid.color_accum.items()])
-        time.sleep(2)
         for color, hold_time in color_timing.items():
             servo_list = list(self.SERVO_DOWN_LIST)
             servo_list[ self.COLOR_PORT[color] ] = self.SERVO_UP_POS
@@ -307,10 +364,12 @@ class Bartris(TetrisEventHandler):
 class amBXtris(TetrisEventHandler):
     def __init__(self):
         self.ambx_device = ambx()
+        self._is_connected = False
         if self.ambx_device.open() is False:
-            print "No ambx device connected"
-            return
+            print "No ambx device connected"            
 
+            return
+        self._is_connected = True
         self._set_color(COLORS["black"])
         return
 
@@ -323,6 +382,8 @@ class amBXtris(TetrisEventHandler):
         self.ambx_device.setFanSpeed(ambx.LEFT_FAN, 0)
     
     def on_line_created(self, tetris_obj):
+        if self._is_connected is False:
+            return
         grid = tetris_obj._grid
         total_cells = sum(grid.color_accum.values())
         rgb_list = [[x * (float(value) / float(total_cells)) for x in key] for key, value in grid.color_accum.items()]
@@ -336,11 +397,9 @@ class amBXtris(TetrisEventHandler):
 
 def main(argv=None):
     b = Bartris()
-    # b = Bartris()
     t = Tetris()
     a = amBXtris()
     t.add_event_handler(a)
-
     t.add_event_handler(b)
     t.init_game()
     try:
