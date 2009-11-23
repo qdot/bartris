@@ -299,7 +299,7 @@ class SerialServo():
 
 class Bartris(TetrisEventHandler):
     def __init__(self):
-        self.SERVO_DOWN_POS  = 80
+        self.SERVO_DOWN_POS  = 70
         self.SERVO_UP_POS    = 160
         self.SERVO_DOWN_LIST = [self.SERVO_DOWN_POS, self.SERVO_DOWN_POS, self.SERVO_DOWN_POS]
         self.COLOR_PORT      = {COLORS["blue"]: 0, COLORS["brown"]: 1, COLORS["white"]: 2}
