@@ -78,7 +78,8 @@ class Tetris():
 
     NORMAL_MODE = 0
     BOOZE_MODE = 1
-    SOBER_MODE = 2
+    DESIGNATED_DRIVER_MODE = 2
+    SINGLE_DRINK_MODE = 3
 
     def __init__(self):
         self._event_handlers = []
@@ -88,19 +89,25 @@ class Tetris():
 
     def _setup_states(self, mode = 0):
         self._params = {
+            "fullscreen"             : False,
+            "fullscreen_width"       : 1024,
+            "fullscreen_height"      : 768,
             "num_cells_wide"         : 10,
             "num_cells_high"         : 20,
             "cell_width"             : 25,
             "cell_height"            : 25,
             "drink_pouring_time"     : 5.0,
             "starting_cell_x"        : 4,
-            "starting_cell_y"        : 1
+            "starting_cell_y"        : 1,
+            "grid_top_x"             : 0,
+            "grid_top_y"             : 0,
+            "modes"                  : ["(N)ormal Mode", "(B)ooze Mode", "(S)ingle Drink Mode", "(D)esignated Driver Mode", "(Q)uit"]
             }
 
         self._level_params = {
             "moving_rate"            : [0.00005,.00004,0.00003,0.00002,0.00001],
             "rotating_rate"          : [0.00009,0.00008,0.00007,0.00006,0.00005],
-            "falling_rate"           : [0.00040,0.00025,0.0001,0.00005,0.00002]
+            "falling_rate"           : [0.00050,0.00035,0.00020,0.00010,0.00005]
             }
 
         self._state = {
@@ -114,22 +121,34 @@ class Tetris():
             "times_found"            : 0,
             "current_level"          : 1,
             "game_over"              : False,
+            "all_finished"           : False,
             "current_y"              : 0,
             "holding_down"           : False
             }
 
 
-        if mode == self.NORMAL_MODE:
+        if mode in [self.NORMAL_MODE, self.SINGLE_DRINK_MODE]:
             self._color_dict     = {1: COLORS["blue"], 6 : COLORS["brown"], 10: COLORS["darkGrey"]}
         elif mode == self.BOOZE_MODE:
             self._color_dict     = {3 : COLORS["brown"], 10: COLORS["darkGrey"]}
-        elif mode == self.SOBER_MODE:
+        elif mode == self.DESIGNATED_DRIVER_MODE:
             self._color_dict     = {10: COLORS["blue"]}
+
+        if mode == self.SINGLE_DRINK_MODE:
+            self._level_params = {
+                "moving_rate"            : [0.00005],
+                "rotating_rate"          : [0.00009],
+                "falling_rate"           : [0.00040]
+                }
 
         self._color_range    = 10
 
         self._textBuff       = 2
-        self._grid           = Grid( 1, 1, self._params["cell_width"], self._params["cell_height"], self._params["num_cells_wide"], self._params["num_cells_high"], COLORS["black"])
+        self._grid           = Grid( 1, 1, self._params["cell_width"], self._params["cell_height"], self._params["num_cells_wide"], self._params["num_cells_high"], COLORS["black"], self._params["fullscreen"], self._params["fullscreen_width"], self._params["fullscreen_height"])
+        if self._params["fullscreen"]:
+            self._params["grid_top_x"] = (self._params["fullscreen_width"] / 2) - (self._grid.width / 2)
+            self._params["grid_top_y"] = (self._params["fullscreen_height"] / 2) - (self._grid.height / 2)
+
         self._tetrominoList  = ['T','I','O','S','Z','L','J']
         self._sound          = Sound()
 
@@ -138,8 +157,10 @@ class Tetris():
     def _setup_display(self):
         os.environ['SDL_VIDEO_CENTERED'] = '1'
         pygame.init()
-        self._screen = pygame.display.set_mode((self._grid.width+self._textBuff,self._grid.height+self._textBuff),0,32)
-        #self._screen = pygame.display.set_mode((1024, 768), pygame.FULLSCREEN, 24)
+        if self._params["fullscreen"]:
+            self._screen = pygame.display.set_mode((1024, 768), pygame.FULLSCREEN, 24)
+        else:
+            self._screen = pygame.display.set_mode((self._grid.width+self._textBuff,self._grid.height+self._textBuff),0,32)
         if pygame.font:
             self._font = pygame.font.Font(None, 18)
 
@@ -148,28 +169,29 @@ class Tetris():
 
     def run_game(self):
         if self._state["game_over"]:
-            self._game_over_state()
+            self._menu_state()
         else:
             self._game_loop()
         self._render()
         return
 
-    def _game_over_state(self):
+    def _menu_state(self):
         current_key = ''
         for event in pygame.event.get():
             if event.type == QUIT:
                 raise QuitException()
             if event.type == pygame.KEYDOWN:
                 current_key = event.key
-
         if current_key == K_q:
             raise QuitException()
         elif current_key == K_n:
             self._setup_states(self.NORMAL_MODE)
         elif current_key == K_b:
             self._setup_states(self.BOOZE_MODE)
+        elif current_key == K_d:
+            self._setup_states(self.DESIGNATED_DRIVER_MODE)
         elif current_key == K_s:
-            self._setup_states(self.SOBER_MODE)
+            self._setup_states(self.SINGLE_DRINK_MODE)
 
     def _game_loop(self):
         time.sleep(0.01)
@@ -185,15 +207,15 @@ class Tetris():
 
     def _move_tetromino(self):
 
-        legal_moves   = {
-            "down"  : self._tetromino.max_y < self._grid.height,
-            "left"  : self._tetromino.min_x > 0,
-            "right" : self._tetromino.max_x < self._grid.width,
-            }
-
         current_key = ''
         up_key = ''
         for event in pygame.event.get():
+            legal_moves   = {
+                "down"  : self._tetromino.max_y < self._grid.height,
+                "left"  : self._tetromino.min_x > 0 and self._grid.accept(self._tetromino.id,self._tetromino.positions[self._tetromino.currentPosition],-1,0),
+                "right" : self._tetromino.max_x < self._grid.width and self._grid.accept(self._tetromino.id,self._tetromino.positions[self._tetromino.currentPosition],1,0),
+                }
+
             if event.type == QUIT:
                 break
             if event.type == pygame.KEYDOWN:
@@ -215,6 +237,12 @@ class Tetris():
             #ADDED: quit current_key
             if current_key == K_q:
                 raise QuitException()
+
+        legal_moves   = {
+            "down"  : self._tetromino.max_y < self._grid.height,
+            "left"  : self._tetromino.min_x > 0 and self._grid.accept(self._tetromino.id,self._tetromino.positions[self._tetromino.currentPosition],-1,0),
+            "right" : self._tetromino.max_x < self._grid.width and self._grid.accept(self._tetromino.id,self._tetromino.positions[self._tetromino.currentPosition],1,0),
+            }
 
         current_time  = time.time()/1000.0
         falling_time  = current_time - self._state["last_falling_time"]
@@ -259,13 +287,16 @@ class Tetris():
         self._state["current_level"] += 1
         if self._state["current_level"] < len(self._level_params["falling_rate"]):
             self._state["falling_rate"] = self._level_params["falling_rate"][self._state["current_level"]]
+        else:
+            self._state["all_finished"] = True
+            self._state["game_over"] = True
         self._sound.play("../sound/levelup.wav")
         for e in self._event_handlers:
             e.on_level_up(self)
 
     def _render(self):
         #render Background
-        pygame.draw.rect(self._screen,(255,255,255),Rect(0,0,self._grid.width+2,self._grid.height+2))
+        pygame.draw.rect(self._screen,(255,255,255),Rect(self._params["grid_top_x"], self._params["grid_top_y"],self._grid.width+2,self._grid.height+2))
         #Render Grid
         self._grid.render(self._screen)
         self._render_status()
@@ -275,12 +306,20 @@ class Tetris():
         if not self._state["game_over"]:
             lineText       = "Lines: " + str(self._grid.num_lines_cleared) + "  Level: " + str(self._state["current_level"])
             lines_text     = self._font.render(lineText, 1, COLORS["white"])
-            lines_text_pos = Rect((1,1),(300,20))
+            lines_text_pos = Rect((self._params["grid_top_x"]+1, self._params["grid_top_y"]+1),(self._params["grid_top_x"] + 300, self._params["grid_top_y"] + 20))
             self._screen.blit(lines_text, lines_text_pos)
         else:
             game_over_text     = self._font.render("GAME OVER... LEVEL: "+str( self._state["current_level"])+" LINES: " + str(self._grid.num_lines_cleared),1, COLORS["red"])
-            game_over_text_pos = Rect((1,1),(300,20))
+            if self._state["all_finished"]:
+                game_over_text     = self._font.render("ALL LEVELS FINISHED! LEVEL: "+str( self._state["current_level"])+" LINES: " + str(self._grid.num_lines_cleared),1, COLORS["red"])
+            game_over_text_pos = Rect((self._params["grid_top_x"]+1, self._params["grid_top_y"]+1),(self._params["grid_top_x"] + 300, self._params["grid_top_y"] + 20))
             self._screen.blit(game_over_text,game_over_text_pos)
+            for i in range(0, len(self._params["modes"])):
+                pLineText       = self._params["modes"][i]
+                p_lines_text     = self._font.render(pLineText, 1, COLORS["white"])
+                p_lines_text_pos = Rect((1+self._params["grid_top_x"],100+(i*25)+self._params["grid_top_y"]),(300,250))
+                self._screen.blit(p_lines_text, p_lines_text_pos)
+
 
     def add_event_handler(self, eh):
         self._event_handlers.append(eh)
@@ -297,12 +336,15 @@ class SerialServo():
         command += chr(self.checksum(command))
         self.serial.write(command)
 
+    def isOpen(self):
+        return self.serial.isOpen()
+
 class Bartris(TetrisEventHandler):
     def __init__(self):
         self.SERVO_DOWN_POS  = 70
         self.SERVO_UP_POS    = 160
         self.SERVO_DOWN_LIST = [self.SERVO_DOWN_POS, self.SERVO_DOWN_POS, self.SERVO_DOWN_POS]
-        self.COLOR_PORT      = {COLORS["blue"]: 0, COLORS["brown"]: 1, COLORS["white"]: 2}
+        self.COLOR_PORT      = {COLORS["blue"]: 1, COLORS["brown"]: 0, COLORS["white"]: 2}
         self._serial = None
         try:
             self._serial = SerialServo()
@@ -334,12 +376,12 @@ class Bartris(TetrisEventHandler):
 
         lineText       = "/".join([DRINKS[x] for x in color_list.keys()])
         lines_text     = self._ingredient_font.render(lineText, 1, COLORS["white"])
-        lines_text_pos = Rect((1,50),(300,150))
+        lines_text_pos = Rect((1+tetris_obj._params["grid_top_x"],50+tetris_obj._params["grid_top_y"]),(300,150))
         pLineText       = "/".join(map(str, [int(x*100) for x in color_list.values()]))
         p_lines_text     = self._percentage_font.render(pLineText, 1, COLORS["white"])
-        p_lines_text_pos = Rect((1,100),(300,250))
+        p_lines_text_pos = Rect((1+tetris_obj._params["grid_top_x"],100+tetris_obj._params["grid_top_y"]),(300,250))
         tetris_obj._screen.blit(lines_text, lines_text_pos)
-        tetris_obj._screen.blit(p_lines_text, p_lines_text_pos)        
+        tetris_obj._screen.blit(p_lines_text, p_lines_text_pos)
         pygame.display.update()
 
     def on_level_up(self, tetris_obj):
@@ -348,7 +390,7 @@ class Bartris(TetrisEventHandler):
         total_cells = sum(grid.color_accum.values())
         color_timing = dict([(c, (float(x) / float(total_cells))) for c, x in grid.color_accum.items()])
         self._render_list(tetris_obj, color_timing)
-        time.sleep(2)        
+        time.sleep(2)
         if self._serial is None or self._serial.isOpen() is False:
             return
         color_timing = dict([(c, (float(x) / float(total_cells)) * tetris_obj._params["drink_pouring_time"]) for c, x in grid.color_accum.items()])
@@ -366,7 +408,7 @@ class amBXtris(TetrisEventHandler):
         self.ambx_device = ambx()
         self._is_connected = False
         if self.ambx_device.open() is False:
-            print "No ambx device connected"            
+            print "No ambx device connected"
 
             return
         self._is_connected = True
@@ -377,10 +419,10 @@ class amBXtris(TetrisEventHandler):
         self.ambx_device.setLightColor(ambx.LEFT_WW_LIGHT,color)
         self.ambx_device.setLightColor(ambx.CENTER_WW_LIGHT,color)
         self.ambx_device.setLightColor(ambx.RIGHT_WW_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.RIGHT_SP_LIGHT,color)        
+        self.ambx_device.setLightColor(ambx.RIGHT_SP_LIGHT,color)
         self.ambx_device.setLightColor(ambx.LEFT_SP_LIGHT,color)
         self.ambx_device.setFanSpeed(ambx.LEFT_FAN, 0)
-    
+
     def on_line_created(self, tetris_obj):
         if self._is_connected is False:
             return

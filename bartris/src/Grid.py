@@ -22,7 +22,7 @@ from   pygame.locals import *
 from   Sound import *
 
 class Grid(object):
-    def __init__(self,start_x,start_y, cell_height,cell_width,num_cells_wide,num_cells_tall, color):
+    def __init__(self,start_x,start_y, cell_height,cell_width,num_cells_wide,num_cells_tall, color, use_fullscreen, fullscreen_width, fullscreen_height):
         self.cells           = {}
         self.start_x         = start_x
         self.start_y         = start_y
@@ -34,20 +34,28 @@ class Grid(object):
         self.color           = color
         self.height          = cell_height * num_cells_tall
         self.width           = cell_width  * num_cells_wide
+        self.grid_top_x      = 0
+        self.grid_top_y      = 0
+        if use_fullscreen:
+            self.grid_top_x      = (fullscreen_width / 2) - (self.width / 2)
+            self.grid_top_y      = (fullscreen_height / 2) - (self.height / 2)
         self.sound           = Sound()
         self.color_accum     = {}
         #Build Grid
         for x in range(self.num_cells_wide):
             for y in range(self.num_cells_tall):
-                self.cells[(x,y)] = (color,Rect((x*self.cell_width+self.start_x,
-                                                 y*self.cell_height+self.start_y),
+                self.cells[(x,y)] = (color,Rect((x*self.cell_width+self.start_x+self.grid_top_x,
+                                                 y*self.cell_height+self.start_y+self.grid_top_y),
                                                 (self.cell_height,self.cell_width)),0)
 
     def set(self, color, x, y, id):
-        self.cells[(x,y)] = (color,Rect((x*self.cell_width+self.start_x,
-                                         y*self.cell_height+self.start_y),
+        self.cells[(x,y)] = (color,Rect((x*self.cell_width+self.start_x+self.grid_top_x,
+                                         y*self.cell_height+self.start_y+self.grid_top_y),
                                         (self.cell_height,self.cell_width)),id)
-    
+
+    def get(self, x, y):
+        return self.cells[(x,y)]
+
     def render(self, screen):
         screen.lock()
         for key in self.cells:
@@ -55,17 +63,17 @@ class Grid(object):
             #BG Rect
             if cell[2] > 0:
                 pygame.draw.rect(screen,(0,0,0),cell[1])
-                rectLeft   = cell[1].left+1
-                rectTop    = cell[1].top+1
-                rectWidth  = cell[1].width-2
-                rectHeight = cell[1].height-2
+                rectLeft   = cell[1].left + 1
+                rectTop    = cell[1].top + 1
+                rectWidth  = cell[1].width - 2
+                rectHeight = cell[1].height - 2
                 nRect = Rect(rectLeft,rectTop,rectWidth,rectHeight)
                 pygame.draw.rect(screen,cell[0],nRect)
             else:
                 pygame.draw.rect(screen,cell[0],cell[1])
         screen.unlock()
 
-    def accept(self, id, postions, x_mv, y_mv):    
+    def accept(self, id, postions, x_mv, y_mv):
         for pos in postions:
             x = pos[0]+x_mv
             y = pos[1]+y_mv
@@ -76,7 +84,7 @@ class Grid(object):
             else:
                 return False
         return True
-        
+
     def checkForLines(self):
         nums = {}
         has_lines = False
@@ -86,7 +94,7 @@ class Grid(object):
         for cell in self.cells:
             y = cell[1]
             if not nums.has_key(y):
-                nums[y] = 0                        
+                nums[y] = 0
             if self.cells[cell][2] > 0:
                 nums[y] += 1
         for num in nums:
@@ -97,7 +105,7 @@ class Grid(object):
                 self.remLine(num)
                 self.shiftGridDown(num)
         return has_lines
-                
+
     def topY(self):
         top = self.num_cells_tall
         for cell in self.cells:
@@ -105,7 +113,7 @@ class Grid(object):
             if y < top and self.cells[cell][2] > 0:
                 top = y
         return top
-            
+
     def remLine(self, y):
         for cell_x in range(self.num_cells_wide):
             # ADDED: color accumulation on line finish
@@ -115,7 +123,7 @@ class Grid(object):
             else:
                 self.color_accum[current_cell_color] += 1
             self.set(self.color,cell_x,y,0)
-            
+
     def shiftGridDown(self,num):
         n_cells = {}
         for cell in self.cells:
@@ -125,12 +133,12 @@ class Grid(object):
             id    = self.cells[cell][2]
             if y < num:
                 self.set(self.color,x,y,id)
-                n_cells[(x,y+1)] = (color,Rect((x*self.cell_width+self.start_x,
-                                                y*self.cell_height+self.start_y),
-                                                (self.cell_height,self.cell_width)),id)                
+                n_cells[(x,y+1)] = (color,Rect((x*self.cell_width+self.start_x+self.grid_top_x,
+                                                y*self.cell_height+self.start_y+self.grid_top_y),
+                                                (self.cell_height,self.cell_width)),id)
         for n_cell in n_cells:
             x     = n_cell[0]
             y     = n_cell[1]
             color = n_cells[n_cell][0]
-            id    = n_cells[n_cell][2]            
+            id    = n_cells[n_cell][2]
             self.set(color,x,y,id)
