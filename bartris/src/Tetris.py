@@ -33,6 +33,7 @@ from types         import *
 os.environ["DYLD_LIBRARY_PATH"] = "/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/"
 sys.path.append('/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/python2.6/site-packages')
 from ambx import *
+import osc
 import serial
 
 
@@ -57,7 +58,6 @@ class TetrisEventHandler():
     def on_line_created(self, tetris_obj):
         return
 
-
 COLORS = {
     "black"               : (0,0,0),
     "white"               : (255, 255, 255),
@@ -68,7 +68,13 @@ COLORS = {
     "brown"               : (0x8e, 0x48, 0x1d)
     }
 
-DRINKS = {
+DRINK_PORTS = {
+    "water" : 0,
+    "coke" : 1,
+    "rum" : 2
+}
+
+DRINK_COLORS = {
     COLORS["darkGrey"] : "rum",
     COLORS["brown"] : "coke",
     COLORS["blue"] : "water"
@@ -168,6 +174,7 @@ class Tetris():
         pygame.display.set_caption("Python Tetris")
 
     def run_game(self):
+        time.sleep(0.01)
         if self._state["game_over"]:
             self._menu_state()
         else:
@@ -194,7 +201,6 @@ class Tetris():
             self._setup_states(self.SINGLE_DRINK_MODE)
 
     def _game_loop(self):
-        time.sleep(0.01)
 
         # Grab vars
         if self._tetromino.active:
@@ -351,30 +357,12 @@ class Bartris(TetrisEventHandler):
         except Exception, e:
             print "SERIAL PORT NOT FOUND, NOT USING BARTRIS"
             pass
-        # time.sleep(2)
-        # self._serial.sendCommand(self.SERVO_DOWN_LIST)
-        # time.sleep(2)
-        # self._serial.sendCommand([self.SERVO_DOWN_POS, self.SERVO_UP_POS, self.SERVO_UP_POS])
-        # time.sleep(2)
-        # self._serial.sendCommand(self.SERVO_DOWN_LIST)
-        # time.sleep(2)
-        # time.sleep(5)
-        # for i in range(25, 115):
-        #     s.sendCommand([i,0,0])
-        #     time.sleep(0.010)
-        # time.sleep(1)
-        # for i in range(115, 25, -1):
-        #     s.sendCommand([i,0,0])
-        #     time.sleep(0.010)
-        # s.sendCommand([10,0,0])
-        # time.sleep(2)
-        # sys.exit(0)
 
     def _render_list(self, tetris_obj, color_list):
         self._ingredient_font = pygame.font.Font(None, 30)
         self._percentage_font = pygame.font.Font(None, 60)
 
-        lineText       = "/".join([DRINKS[x] for x in color_list.keys()])
+        lineText       = "/".join([DRINK_COLORS[x] for x in color_list.keys()])
         lines_text     = self._ingredient_font.render(lineText, 1, COLORS["white"])
         lines_text_pos = Rect((1+tetris_obj._params["grid_top_x"],50+tetris_obj._params["grid_top_y"]),(300,150))
         pLineText       = "/".join(map(str, [int(x*100) for x in color_list.values()]))
@@ -390,42 +378,18 @@ class Bartris(TetrisEventHandler):
         total_cells = sum(grid.color_accum.values())
         color_timing = dict([(c, (float(x) / float(total_cells))) for c, x in grid.color_accum.items()])
         self._render_list(tetris_obj, color_timing)
-        time.sleep(2)
-        if self._serial is None or self._serial.isOpen() is False:
-            return
         color_timing = dict([(c, (float(x) / float(total_cells)) * tetris_obj._params["drink_pouring_time"]) for c, x in grid.color_accum.items()])
         for color, hold_time in color_timing.items():
-            servo_list = list(self.SERVO_DOWN_LIST)
-            servo_list[ self.COLOR_PORT[color] ] = self.SERVO_UP_POS
-            self._serial.sendCommand(servo_list)
-            time.sleep(hold_time)
-            self._serial.sendCommand(self.SERVO_DOWN_LIST)
+            osc.sendMsg("/tetris/level", [ DRINK_PORTS[DRINK_COLORS[color]], hold_time], "localhost", 9001)
+            time.sleep(hold_time + 1)
             time.sleep(2)
         grid.color_accum = {}
 
 class amBXtris(TetrisEventHandler):
     def __init__(self):
-        self.ambx_device = ambx()
-        self._is_connected = False
-        if self.ambx_device.open() is False:
-            print "No ambx device connected"
-
-            return
-        self._is_connected = True
-        self._set_color(COLORS["black"])
         return
 
-    def _set_color(self, color):
-        self.ambx_device.setLightColor(ambx.LEFT_WW_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.CENTER_WW_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.RIGHT_WW_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.RIGHT_SP_LIGHT,color)
-        self.ambx_device.setLightColor(ambx.LEFT_SP_LIGHT,color)
-        self.ambx_device.setFanSpeed(ambx.LEFT_FAN, 0)
-
     def on_line_created(self, tetris_obj):
-        if self._is_connected is False:
-            return
         grid = tetris_obj._grid
         total_cells = sum(grid.color_accum.values())
         rgb_list = [[x * (float(value) / float(total_cells)) for x in key] for key, value in grid.color_accum.items()]
@@ -433,11 +397,11 @@ class amBXtris(TetrisEventHandler):
         for c in rgb_list:
             color = map(operator.add, color, c)
         color = map(int, color)
-        print "Setting color %s" % color
-        self._set_color(color)
-
+        osc.sendMsg("/tetris/line", color, "localhost", 9001)
 
 def main(argv=None):
+    osc.init()
+
     b = Bartris()
     t = Tetris()
     a = amBXtris()
