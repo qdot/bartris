@@ -1,5 +1,7 @@
 import sys
 sys.path.append('/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/python2.6/site-packages')
+import os
+os.environ["DYLD_LIBRARY_PATH"] = "/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/"
 import operator
 import time
 import osc
@@ -14,8 +16,8 @@ class ArduinoDrinkControl():
     WATER = 0
     COKE = 1
     RUM = 2
-    SERVO_DOWN_POS  = 70
-    SERVO_UP_POS    = 160
+    SERVO_DOWN_POS  = 160
+    SERVO_UP_POS    = 180
 
     def __init__(self):
         self.SERVO_DOWN_LIST = [self.SERVO_DOWN_POS, self.SERVO_DOWN_POS,
@@ -213,6 +215,7 @@ class MarioHandler(OSCBinder):
         try:
             v = TranceVibratorThread(msg[0][2])
             v.start()
+            g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .2)
         except Exception, e:
             print e
 

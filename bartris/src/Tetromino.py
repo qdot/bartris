@@ -61,11 +61,11 @@ class Tetromino(object):
             pygame.mixer.init(self.freq, self.bitsize, self.channels, self.buffer)
             pygame.mixer.music.set_volume(self.volume)
         self.cluck = pygame.mixer.Sound(self.mfile)
-            
+
     def move(self, grid, x_direction, y_direction):
         self.max_x = 0
         self.min_x = 0
-        self.max_y = 0        
+        self.max_y = 0
         max_x_pos  = 0
         min_x_pos  = 50
         max_y_pos  = 0
@@ -78,7 +78,7 @@ class Tetromino(object):
                     grid.set(self.mask_color,pos[idx][0],pos[idx][1],0)
                 for posIdx in range(len(self.positions)):
                     pos  = self.positions[posIdx]
-                    for idx in range(len(pos)):                
+                    for idx in range(len(pos)):
                         pos[idx] = (pos[idx][0]+x_direction,pos[idx][1]+y_direction)
                         x        = pos[idx][0]
                         y        = pos[idx][1]
@@ -91,25 +91,32 @@ class Tetromino(object):
                             if x < min_x_pos:
                                 min_x_pos = x
                 self.max_x = max_x_pos*grid.cell_width  + grid.cell_width
-                self.min_x = min_x_pos*grid.cell_width 
+                self.min_x = min_x_pos*grid.cell_width
                 self.max_y = max_y_pos*grid.cell_height + grid.cell_height
             else:
                 self.cluck.play()
                 self.active = False
-                
-    def rotate(self,grid):
+
+    def rotate(self,grid,direction):
         self.max_y = 0
         if self.active:
             self.oldPosition = self.currentPosition
             pos = self.positions[self.oldPosition]
             for idx in range(len(pos)):
-                grid.set(self.mask_color,pos[idx][0],pos[idx][1],0)                                
-            if self.currentPosition < len(self.positions)-1:
-                self.currentPosition += 1                
+                grid.set(self.mask_color,pos[idx][0],pos[idx][1],0)
+            if direction == -1:
+                if self.currentPosition < len(self.positions)-1:
+                    self.currentPosition += 1
+                else:
+                    self.currentPosition = 0
             else:
-                self.currentPosition = 0
+                if self.currentPosition > 0:
+                    self.currentPosition -= 1
+                else:
+                    self.currentPosition = len(self.positions)-1
+            print self.currentPosition
             self.move(grid,0,0)
-            
+
     def I(self):
         #self.color = (49,199,239)
         self.positions.append([(self.first_x,   self.first_y),   (self.first_x+1, self.first_y),
@@ -117,35 +124,35 @@ class Tetromino(object):
         self.positions.append([(self.first_x+2, self.first_y-2), (self.first_x+2, self.first_y-1),
                                (self.first_x+2, self.first_y),   (self.first_x+2, self.first_y+1)])
     def O(self):
-        #self.color = (247,211,8)        
+        #self.color = (247,211,8)
         self.positions.append([(self.first_x,   self.first_y),   (self.first_x+1, self.first_y-1),
                                (self.first_x+1, self.first_y),   (self.first_x,   self.first_y-1)])
     def T(self):
-        #self.color = (173,77,156)        
+        #self.color = (173,77,156)
         self.positions.append([(self.first_x,   self.first_y),   (self.first_x+1, self.first_y),
-                               (self.first_x+2, self.first_y),   (self.first_x+1, self.first_y-1)])        
+                               (self.first_x+2, self.first_y),   (self.first_x+1, self.first_y-1)])
         self.positions.append([(self.first_x+1, self.first_y),   (self.first_x+2, self.first_y),
-                               (self.first_x+1, self.first_y+1), (self.first_x+1, self.first_y-1)])           
+                               (self.first_x+1, self.first_y+1), (self.first_x+1, self.first_y-1)])
         self.positions.append([(self.first_x,   self.first_y),   (self.first_x+1, self.first_y),
                                (self.first_x+2, self.first_y),   (self.first_x+1, self.first_y+1)])
         self.positions.append([(self.first_x+1, self.first_y),   (self.first_x,   self.first_y),
                                (self.first_x+1, self.first_y+1), (self.first_x+1, self.first_y-1)])
     def S(self):
-        #self.color = (66,182,66)        
+        #self.color = (66,182,66)
         self.positions.append([(self.first_x,   self.first_y),   (self.first_x+1, self.first_y),
-                               (self.first_x+1, self.first_y+1), (self.first_x+2, self.first_y+1)])        
+                               (self.first_x+1, self.first_y+1), (self.first_x+2, self.first_y+1)])
         self.positions.append([(self.first_x+2, self.first_y),   (self.first_x+2, self.first_y+1),
                                (self.first_x+1, self.first_y+1), (self.first_x+1, self.first_y+2)])
-    def Z(self):        
-        #self.color = (239,32,41)        
+    def Z(self):
+        #self.color = (239,32,41)
         self.positions.append([(self.first_x,   self.first_y+1), (self.first_x+1, self.first_y+1),
-                               (self.first_x+1, self.first_y),   (self.first_x+2, self.first_y)])        
+                               (self.first_x+1, self.first_y),   (self.first_x+2, self.first_y)])
         self.positions.append([(self.first_x+1, self.first_y),   (self.first_x+1, self.first_y+1),
                                (self.first_x+2, self.first_y+1), (self.first_x+2, self.first_y+2)])
     def L(self):
-        #self.color = (90,101,173)        
+        #self.color = (90,101,173)
         self.positions.append([(self.first_x,   self.first_y),   (self.first_x,   self.first_y+1),
-                               (self.first_x+1, self.first_y+1), (self.first_x+2, self.first_y+1)])        
+                               (self.first_x+1, self.first_y+1), (self.first_x+2, self.first_y+1)])
         self.positions.append([(self.first_x+1, self.first_y),   (self.first_x+1, self.first_y+1),
                                (self.first_x,   self.first_y+2), (self.first_x+1, self.first_y+2)])
         self.positions.append([(self.first_x,   self.first_y+1), (self.first_x+1, self.first_y+1),
@@ -153,7 +160,7 @@ class Tetromino(object):
         self.positions.append([(self.first_x+2, self.first_y),   (self.first_x+1, self.first_y),
                                (self.first_x+1, self.first_y+1), (self.first_x+1, self.first_y+2)])
     def J(self):
-        #self.color = (239,121,33)                
+        #self.color = (239,121,33)
         self.positions.append([(self.first_x,   self.first_y+1), (self.first_x+1, self.first_y+1),
                                (self.first_x+2, self.first_y+1), (self.first_x+2, self.first_y)])
         self.positions.append([(self.first_x,   self.first_y),   (self.first_x+1, self.first_y),
@@ -161,4 +168,4 @@ class Tetromino(object):
         self.positions.append([(self.first_x,   self.first_y+1), (self.first_x,   self.first_y+2),
                                (self.first_x+1, self.first_y+1), (self.first_x+2, self.first_y+1)])
         self.positions.append([(self.first_x+1, self.first_y),   (self.first_x+1, self.first_y+1),
-                               (self.first_x+1, self.first_y+2), (self.first_x+2, self.first_y+2)])            
+                               (self.first_x+1, self.first_y+2), (self.first_x+2, self.first_y+2)])

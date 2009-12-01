@@ -92,7 +92,12 @@ class Tetris():
         self._setup_states()
         self._state["game_over"] = True
         self._setup_display()
-
+        self._joystick = None
+        if pygame.joystick.get_count() > 0:
+            print "FOUND A JOYSTICK!"
+            self._joystick = pygame.joystick.Joystick(0)
+            self._joystick.init()
+            
     def _setup_states(self, mode = 0):
         self._params = {
             "fullscreen"             : False,
@@ -222,8 +227,30 @@ class Tetris():
                 "right" : self._tetromino.max_x < self._grid.width and self._grid.accept(self._tetromino.id,self._tetromino.positions[self._tetromino.currentPosition],1,0),
                 }
 
+
+
             if event.type == QUIT:
                 break
+
+            if event.type == pygame.JOYAXISMOTION:
+                a = event.axis
+                p = event.value
+                #turn joystick into key simulations
+                if a == 0:
+                    if p < -0.01:
+                        current_key = K_LEFT
+                    elif p > 0.01:
+                        current_key = K_RIGHT
+                else:
+                    if p > 0.01:
+                        current_key = K_DOWN
+                    elif p < 0.01 and p > -0.01:
+                        up_key = K_DOWN
+            if event.type == pygame.JOYBUTTONDOWN:
+                if event.button == 1:
+                    current_key = K_z
+                else:
+                    current_key = K_x
             if event.type == pygame.KEYDOWN:
                 current_key = event.key
             elif event.type == pygame.KEYUP:
@@ -238,8 +265,10 @@ class Tetris():
             elif up_key == K_DOWN:
                 self._state["holding_down"] = False
             #TODO: Fix rotation states
-            if current_key == K_UP and False not in legal_moves.values():
-                self._tetromino.rotate(self._grid)
+            if current_key == K_z and False not in legal_moves.values():
+                self._tetromino.rotate(self._grid, -1)
+            if current_key == K_x and False not in legal_moves.values():
+                self._tetromino.rotate(self._grid, 1)
             #ADDED: quit current_key
             if current_key == K_q:
                 raise QuitException()
