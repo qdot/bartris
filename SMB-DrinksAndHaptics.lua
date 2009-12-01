@@ -24,23 +24,34 @@ while (true) do
 
 	-- print player's lives...I always thought this was a major omission of the status bar :p
 	text(63,13,"x"..memory.readbyte(0x075a)+1);
-	if (last_coin ~= memory.readbyte(0x075e)) then
-		coin_msg[3] = memory.readbyte(0x075e)
-		last_coin = memory.readbyte(0x075e)
-		oscclient:send(coin_msg);
+
+	-- If 0x0717 is > 0, we're in demo mode. Ignore.
+	-- however, there's apparently no continue in lua, so we
+	-- can't early exit. WTF.
+	if (memory.readbyte(0x0717) == 0) then
+		-- Message for coin - Pour coke
+		if (last_coin ~= memory.readbyte(0x075e)) then
+			coin_msg[3] = memory.readbyte(0x075e)
+			last_coin = memory.readbyte(0x075e)
+			oscclient:send(coin_msg);
+		end;
+		-- Message for flag begin. Pour rum, vibrate
+		if (memory.readbyte(0x070f) > 0 and is_flagged == 0) then
+			flag_msg[3] = memory.readbyte(0x070f)
+			is_flagged = 1;
+			oscclient:send(flag_msg);
+		end;
+		-- Reset flag state
+		if (memory.readbyte(0x070f) == 0 and is_flagged == 1) then
+			is_flagged = 0;
+		end;
+		-- Message for speed/wind for ambx
+		if (memory.readbyte(0x0057) ~= last_speed) then
+			speed_msg[3] = memory.readbyte(0x0057)
+			last_speed = memory.readbyte(0x0057)
+			oscclient:send(speed_msg)
+		end;
 	end;
-	if (memory.readbyte(0x070f) > 0 and is_flagged == 0) then
-		flag_msg[3] = memory.readbyte(0x070f)
-		is_flagged = 1;
-		oscclient:send(flag_msg);
-	end;
-	if (memory.readbyte(0x070f) == 0 and is_flagged == 1) then
-		is_flagged = 0;
-	end;
-	if (memory.readbyte(0x0057) ~= last_speed) then
-		speed_msg[3] = memory.readbyte(0x0057)
-		last_speed = memory.readbyte(0x0057)
-		oscclient:send(speed_msg)
-	end;
+
 	FCEU.frameadvance();
 end;
