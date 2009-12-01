@@ -139,7 +139,7 @@ class Tetris():
 
 
         if mode in [self.NORMAL_MODE, self.SINGLE_DRINK_MODE]:
-            self._color_dict     = {1: COLORS["blue"], 6 : COLORS["brown"], 10: COLORS["darkGrey"]}
+            self._color_dict     = {1: COLORS["blue"], 6 : COLORS["brown"], 10: COLORS["darkGrey"]}        
         elif mode == self.BOOZE_MODE:
             self._color_dict     = {3 : COLORS["brown"], 10: COLORS["darkGrey"]}
         elif mode == self.DESIGNATED_DRIVER_MODE:
@@ -151,6 +151,7 @@ class Tetris():
                 "rotating_rate"          : [0.00009],
                 "falling_rate"           : [0.00040]
                 }
+            self._params["drink_pouring_time"] = 12.5
 
         self._color_range    = 10
 
@@ -410,8 +411,9 @@ class Bartris(TetrisEventHandler):
         color_timing = dict([(c, (float(x) / float(total_cells)) * tetris_obj._params["drink_pouring_time"]) for c, x in grid.color_accum.items()])
         for color, hold_time in color_timing.items():
             osc.sendMsg("/tetris/level", [ DRINK_PORTS[DRINK_COLORS[color]], hold_time], "localhost", 9001)
-            time.sleep(hold_time + 1)
-            time.sleep(2)
+            #time.sleep(hold_time + 1)
+            #time.sleep(2)
+        time.sleep(max(color_timing.values()) + 2.0)
         grid.color_accum = {}
 
 class amBXtris(TetrisEventHandler):

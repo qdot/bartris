@@ -16,7 +16,8 @@ class ArduinoDrinkControl():
     WATER = 0
     COKE = 1
     RUM = 2
-    SERVO_DOWN_POS  = 160
+
+    SERVO_DOWN_POS  = 152
     SERVO_UP_POS    = 180
 
     def __init__(self):
@@ -207,7 +208,16 @@ class MarioHandler(OSCBinder):
             if g_drinkControlThread.get_time(ArduinoDrinkControl.COKE) > 0:
                 g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .1)
             else:
-                g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .2)
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .3)
+        except Exception, e:
+            print e
+
+    def on_enemy(self, *msg):
+        try:
+            if g_drinkControlThread.get_time(ArduinoDrinkControl.RUM) > 0:
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .1)
+            else:
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .3)
         except Exception, e:
             print e
 
@@ -215,7 +225,7 @@ class MarioHandler(OSCBinder):
         try:
             v = TranceVibratorThread(msg[0][2])
             v.start()
-            g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .2)
+            g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, 3.0 * (255.0-msg[0][2]) / 255.0)
         except Exception, e:
             print e
 
@@ -225,6 +235,7 @@ class MarioHandler(OSCBinder):
         osc.bind(self.on_flag, "/mario/flag")
         osc.bind(self.on_speed, "/mario/speed")
         osc.bind(self.on_sky, "/mario/sky")
+        osc.bind(self.on_enemy, "/mario/enemy")
 
     def on_speed(self, *msg):
         try:
