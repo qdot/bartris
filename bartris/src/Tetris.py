@@ -100,7 +100,7 @@ class Tetris():
             
     def _setup_states(self, mode = 0):
         self._params = {
-            "fullscreen"             : False,
+            "fullscreen"             : True,
             "fullscreen_width"       : 1024,
             "fullscreen_height"      : 768,
             "num_cells_wide"         : 10,

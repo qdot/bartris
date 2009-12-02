@@ -13,11 +13,11 @@ from ambx import ambx
 ################################################################################
 
 class ArduinoDrinkControl():
-    WATER = 0
-    COKE = 1
-    RUM = 2
+    WATER = 2
+    COKE = 0
+    RUM = 1
 
-    SERVO_DOWN_POS  = 152
+    SERVO_DOWN_POS  = 151
     SERVO_UP_POS    = 180
 
     def __init__(self):
@@ -125,6 +125,9 @@ class ambxThread(BaseThread):
     fan_speed = 0
     _need_light_update = False
     _need_fan_update = False
+    color_time = 0
+    last_time = 0
+    old_colors = []
 
     def __init__(self):
         BaseThread.__init__(self)
@@ -133,18 +136,36 @@ class ambxThread(BaseThread):
             print "No ambx found, not using ambx system"
             self._ambx = None
 
+    def clear_timed_color(self):
+        if self.color_time > 0:
+            print "clearing timed color"
+            self.colors = self.old_colors
+            self._need_light_update = True
+            self.color_time = 0
+
     def set_all_colors(self, color):
+        self.clear_timed_color()
         for i in range(0, 5):
             self.colors[i] = color
+        print self.colors
         self._need_light_update = True
 
-    def set_color(self, index, color):
+    def set_color(self, index, color):        
+        self.clear_timed_color()
+        self.color_time = 0
         self.colors[i] = color
         self._need_light_update = True
 
     def set_fan_speed(self, speed):
         self.fan_speed = speed
         self._need_fan_update = True
+
+    def set_timed_color(self, color, t):
+        self.clear_timed_color()
+        self.old_colors = list(self.colors)
+        self.set_all_colors(color)
+        self.color_time = t
+        self.last_time = time.time()
 
     def run(self):
         if self._ambx is None:
@@ -154,6 +175,8 @@ class ambxThread(BaseThread):
             print "Starting ambx thread"
             self.should_run = True
             while self.should_run:
+                if self.color_time > 0 and (time.time() - self.last_time) > self.color_time:
+                    self.clear_timed_color()
                 if self._need_light_update is True:
                     for i in range(0, 5):
                         self._ambx.setLightColor(self.lights[i], self.colors[i])
@@ -209,15 +232,23 @@ class MarioHandler(OSCBinder):
                 g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .1)
             else:
                 g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .3)
+            g_ambxThread.set_timed_color((0xf3, 0xff, 0x39), .5)
         except Exception, e:
             print e
 
+    def on_die(self, *msg):
+        try:
+            g_drinkControlThread.add_to_time(ArduinoDrinkControl.WATER, .75)
+        except Exception, e:
+            print e
+        
     def on_enemy(self, *msg):
         try:
             if g_drinkControlThread.get_time(ArduinoDrinkControl.RUM) > 0:
                 g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .1)
             else:
                 g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .3)
+            g_ambxThread.set_timed_color((255, 0, 0), .5)
         except Exception, e:
             print e
 
@@ -235,6 +266,7 @@ class MarioHandler(OSCBinder):
         osc.bind(self.on_flag, "/mario/flag")
         osc.bind(self.on_speed, "/mario/speed")
         osc.bind(self.on_sky, "/mario/sky")
+        osc.bind(self.on_die, "/mario/die")
         osc.bind(self.on_enemy, "/mario/enemy")
 
     def on_speed(self, *msg):
@@ -253,6 +285,9 @@ class MarioHandler(OSCBinder):
             print e
 
     def on_sky(self, *msg):
+        sky_color = [(0, 0, 20), (0, 0, 180), (0, 0, 180), (255,0,0), (0,0,0)]
+        color = sky_color[msg[0][2]]
+        g_ambxThread.set_all_colors(color)
         return
 
 ################################################################################

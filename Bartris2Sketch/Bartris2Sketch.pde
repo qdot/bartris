@@ -3,7 +3,7 @@
 #define SERIAL_SPEED 38400
 #define START_BYTE 'a'
 #define MSG_LEN 5
-#define DOWN_POS 152
+#define DOWN_POS 150
 
 char r[MSG_LEN];
 char started = 0;
