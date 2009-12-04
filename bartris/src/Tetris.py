@@ -34,8 +34,6 @@ os.environ["DYLD_LIBRARY_PATH"] = "/Users/qdot/git-projects/library/usr_darwin_1
 sys.path.append('/Users/qdot/git-projects/library/usr_darwin_10.5_x86/lib/python2.6/site-packages')
 from ambx import *
 import osc
-import serial
-
 
 def hexDump(bytes):
     """Useful utility; prints the string in hexadecimal"""
@@ -69,9 +67,9 @@ COLORS = {
     }
 
 DRINK_PORTS = {
-    "water" : 0,
-    "coke" : 1,
-    "rum" : 2
+    "water" : 2,
+    "coke" : 0,
+    "rum" : 1
 }
 
 DRINK_COLORS = {
@@ -100,14 +98,14 @@ class Tetris():
             
     def _setup_states(self, mode = 0):
         self._params = {
-            "fullscreen"             : True,
+            "fullscreen"             : False,
             "fullscreen_width"       : 1024,
             "fullscreen_height"      : 768,
             "num_cells_wide"         : 10,
             "num_cells_high"         : 20,
             "cell_width"             : 25,
             "cell_height"            : 25,
-            "drink_pouring_time"     : 5.0,
+            "drink_pouring_time"     : 10.0,
             "starting_cell_x"        : 4,
             "starting_cell_y"        : 1,
             "grid_top_x"             : 0,
@@ -126,7 +124,7 @@ class Tetris():
             "falling_rate"           : self._level_params["falling_rate"][0],
             "last_moving_time"       : 0,
             "last_rotating_time"     : 0,
-            "level_up_line_count"    : 2,
+            "level_up_line_count"    : 5,
             "last_num_lines_cleared" : 0,
             "top_y"                  : 0,
             "times_found"            : 0,
@@ -151,7 +149,7 @@ class Tetris():
                 "rotating_rate"          : [0.00009],
                 "falling_rate"           : [0.00040]
                 }
-            self._params["drink_pouring_time"] = 12.5
+            self._params["drink_pouring_time"] = 20.0
 
         self._color_range    = 10
 
@@ -212,6 +210,7 @@ class Tetris():
         if self._tetromino.active:
             self._move_tetromino()
         else: #New Tetromino
+            osc.sendMsg("/tetris/piece_down", [0], "localhost", 9001)
             self._new_tetromino()
         #Levels and Speedup
         if self._grid.num_lines_cleared >= (self._state["level_up_line_count"] * self._state["current_level"]) and self._state["last_num_lines_cleared"] != self._grid.num_lines_cleared:
@@ -263,7 +262,9 @@ class Tetris():
                 self._tetromino.move(self._grid,-1,0)
             if current_key == K_DOWN:
                 self._state["holding_down"] = True
+                osc.sendMsg("/mario/speed", [40], "localhost", 9001)
             elif up_key == K_DOWN:
+                osc.sendMsg("/mario/speed", [0], "localhost", 9001)
                 self._state["holding_down"] = False
             #TODO: Fix rotation states
             if current_key == K_z and False not in legal_moves.values():
@@ -360,33 +361,12 @@ class Tetris():
     def add_event_handler(self, eh):
         self._event_handlers.append(eh)
 
-class SerialServo():
-    def __init__(self):
-        self.serial = serial.Serial(port="/dev/tty.usbserial-A6004oBL", baudrate=38400)
-
-    def checksum(self, msg):
-        return reduce(operator.add, map(ord, msg)) % 256
-
-    def sendCommand(self, speed_list):
-        command = ''.join(['a'] + map(chr, speed_list))
-        command += chr(self.checksum(command))
-        self.serial.write(command)
-
-    def isOpen(self):
-        return self.serial.isOpen()
-
 class Bartris(TetrisEventHandler):
     def __init__(self):
         self.SERVO_DOWN_POS  = 70
         self.SERVO_UP_POS    = 160
         self.SERVO_DOWN_LIST = [self.SERVO_DOWN_POS, self.SERVO_DOWN_POS, self.SERVO_DOWN_POS]
         self.COLOR_PORT      = {COLORS["blue"]: 1, COLORS["brown"]: 0, COLORS["white"]: 2}
-        self._serial = None
-        try:
-            self._serial = SerialServo()
-        except Exception, e:
-            print "SERIAL PORT NOT FOUND, NOT USING BARTRIS"
-            pass
 
     def _render_list(self, tetris_obj, color_list):
         self._ingredient_font = pygame.font.Font(None, 30)
@@ -410,6 +390,7 @@ class Bartris(TetrisEventHandler):
         self._render_list(tetris_obj, color_timing)
         color_timing = dict([(c, (float(x) / float(total_cells)) * tetris_obj._params["drink_pouring_time"]) for c, x in grid.color_accum.items()])
         for color, hold_time in color_timing.items():
+            print [ DRINK_PORTS[DRINK_COLORS[color]], hold_time]
             osc.sendMsg("/tetris/level", [ DRINK_PORTS[DRINK_COLORS[color]], hold_time], "localhost", 9001)
             #time.sleep(hold_time + 1)
             #time.sleep(2)

@@ -8,6 +8,7 @@ import osc
 import trancevibe
 import threading
 import serial
+import traceback
 from ambx import ambx
 
 ################################################################################
@@ -17,7 +18,7 @@ class ArduinoDrinkControl():
     COKE = 0
     RUM = 1
 
-    SERVO_DOWN_POS  = 151
+    SERVO_DOWN_POS  = 150
     SERVO_UP_POS    = 180
 
     def __init__(self):
@@ -100,21 +101,54 @@ g_drinkControlThread = ArduinoDrinkControlThread()
 ################################################################################
 
 class TranceVibratorThread(BaseThread):
-    def __init__(self, t):
-        BaseThread.__init__(self)
-        self._run_time = t
+    current_time = 0
+    run_time = -1
+    t = threading.Lock()    
 
-    def run(self):
-        tv = trancevibe.TranceVibrator()
-        tv.open(0)
-        tv.set_speed(255)
+    def __init__(self):
+        BaseThread.__init__(self)
         try:
-            time.sleep((255 - self._run_time) * .005)
+            self.tv = trancevibe.TranceVibrator()
+            self.tv.open(0)
         except Exception, e:
+            print "TRANCEVIBE EXCEPTION"
+            print e
+            self.tv = None
+
+    def set_time(self, s = 0):
+        try:
+            self.t.acquire()
+            self.run_time = s
+            self.current_time = time.time()
+            self.tv.set_speed(255)
+        except Exception, e:
+            print traceback.print_exc()
             print e
             print "EXCEPTION?"
-        tv.set_speed(0)
-        tv.close()
+        finally:
+            self.t.release()
+
+    def run(self):
+        if self.tv is None:
+            return
+        self.should_run = True
+        try:
+            while self.should_run:
+                if self.run_time > 0:
+                    if time.time() - self.current_time > self.run_time:
+                        self.t.acquire()
+                        self.tv.set_speed(0)
+                        self.run_time = 0
+                        self.t.release()
+            self.tv.set_speed(0)
+            self.tv.close()
+        except Exception, e:
+            print traceback.print_exc()
+            print e
+            print "EXCEPTION?"
+        finally:
+            self.t.release()
+g_tranceVibratorThread = TranceVibratorThread()
 
 ################################################################################
 
@@ -150,7 +184,7 @@ class ambxThread(BaseThread):
         print self.colors
         self._need_light_update = True
 
-    def set_color(self, index, color):        
+    def set_color(self, index, color):
         self.clear_timed_color()
         self.color_time = 0
         self.colors[i] = color
@@ -203,6 +237,7 @@ class OSCServer():
         self._threads = []
         self._threads.append(g_drinkControlThread)
         self._threads.append(g_ambxThread)
+        self._threads.append(g_tranceVibratorThread)
         [thread.start() for thread in self._threads]
 
     def add_handler(self, h):
@@ -229,34 +264,33 @@ class MarioHandler(OSCBinder):
     def on_coin(self, *msg):
         try:
             if g_drinkControlThread.get_time(ArduinoDrinkControl.COKE) > 0:
-                g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .1)
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .2)
             else:
-                g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .3)
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .4)
             g_ambxThread.set_timed_color((0xf3, 0xff, 0x39), .5)
         except Exception, e:
             print e
 
     def on_die(self, *msg):
         try:
-            g_drinkControlThread.add_to_time(ArduinoDrinkControl.WATER, .75)
+            g_drinkControlThread.add_to_time(ArduinoDrinkControl.WATER, 2.0)
         except Exception, e:
             print e
-        
+
     def on_enemy(self, *msg):
         try:
             if g_drinkControlThread.get_time(ArduinoDrinkControl.RUM) > 0:
                 g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .1)
             else:
-                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .3)
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .1)
             g_ambxThread.set_timed_color((255, 0, 0), .5)
         except Exception, e:
             print e
 
     def on_flag(self, *msg):
         try:
-            v = TranceVibratorThread(msg[0][2])
-            v.start()
-            g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, 3.0 * (255.0-msg[0][2]) / 255.0)
+            g_tranceVibratorThread.set_time((255 - msg[0][2]) * .005)
+            g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .75 * (255.0-msg[0][2]) / 255.0)
         except Exception, e:
             print e
 
@@ -300,6 +334,15 @@ class TetrisHandler():
         print "Binding Tetris Functions"
         osc.bind(self.on_line, "/tetris/line")
         osc.bind(self.on_level, "/tetris/level")
+        osc.bind(self.on_piece_down, "/tetris/piece_down")
+
+    def on_piece_down(self, *msg):
+        try:
+            g_tranceVibratorThread.set_time(.2)
+        except Exception, e:
+            print traceback.print_exc()
+            print "EX"
+            print e
 
     def on_line(self, *msg):
         color = msg[0][2:5]
@@ -308,7 +351,7 @@ class TetrisHandler():
 
     def on_level(self, *msg):
         #print msg
-        g_drinkControlThread.add_to_time(msg[0][2], msg[0][3])        
+        g_drinkControlThread.add_to_time(msg[0][2], msg[0][3])
         return
 
 ################################################################################
