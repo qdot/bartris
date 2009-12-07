@@ -143,7 +143,7 @@ class Tetris():
         elif mode == self.DESIGNATED_DRIVER_MODE:
             self._color_dict     = {10: COLORS["blue"]}
 
-        if mode == self.SINGLE_DRINK_MODE:
+        if mode == self.SINGLE_DRINK_MODE or mode == self.BOOZE_MODE:
             self._level_params = {
                 "moving_rate"            : [0.00005],
                 "rotating_rate"          : [0.00009],

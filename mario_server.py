@@ -140,6 +140,7 @@ class TranceVibratorThread(BaseThread):
                         self.tv.set_speed(0)
                         self.run_time = 0
                         self.t.release()
+                time.sleep(.005)
             self.tv.set_speed(0)
             self.tv.close()
         except Exception, e:
@@ -263,6 +264,7 @@ class MarioHandler(OSCBinder):
 
     def on_coin(self, *msg):
         try:
+            print "Coin!"
             if g_drinkControlThread.get_time(ArduinoDrinkControl.COKE) > 0:
                 g_drinkControlThread.add_to_time(ArduinoDrinkControl.COKE, .2)
             else:
@@ -279,10 +281,11 @@ class MarioHandler(OSCBinder):
 
     def on_enemy(self, *msg):
         try:
+            print "Enemy!"
             if g_drinkControlThread.get_time(ArduinoDrinkControl.RUM) > 0:
-                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .1)
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .4)
             else:
-                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .1)
+                g_drinkControlThread.add_to_time(ArduinoDrinkControl.RUM, .2)
             g_ambxThread.set_timed_color((255, 0, 0), .5)
         except Exception, e:
             print e
